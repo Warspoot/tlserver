@@ -1,0 +1,96 @@
+[project]
+name = "tlserver"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "flask~=2.0",
+  "waitress~=2.1",
+
+  "quart~=0.18",
+  "trio~=0.22",
+  "quart-trio~=0.10",
+  "quart-cors~=0.8",
+  "hypercorn~=0.14",
+  # "fairseq~=0.12.2",
+  # "fastseq~=0.0.3",
+  # "torch~=2.7",
+  # "torchaudio~=2.7",
+  # "torchvision~=0.12",
+  "litellm~=1.67",
+  "ctranslate2~=4.2",
+  "sentencepiece~=0.1",
+]
+
+[tool.uv.sources]
+torch = { index = "pytorch" }
+torchaudio = { index = "pytorch" }
+torchvision = { index = "pytorch" }
+
+[[tool.uv.index]]
+name = "pytorch"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+
+[tool.ruff]
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+  # ===== undesirable =====
+
+  "D",   # pydocstyle
+  "EM",  # flake8-errmsg
+  "FIX", # flake8-fixme
+  "TD",  # flake8-todos
+
+  # ===== doesn't apply =====
+
+  #   "AIR",   # Airflow
+  #   "FAST",  # FastAPI
+  #   "PD",    # pandas-vet
+
+  # ===== to be disabled with formatter =====
+
+  # tab-indentation (W191)
+  "W191",
+  # indentation-with-invalid-multiple (E111)
+  "E111",
+  # indentation-with-invalid-multiple-comment (E114)
+  "E114",
+  # over-indented (E117)
+  "E117",
+  # docstring-tab-indentation (D206)
+  "D206",
+  # triple-single-quotes (D300)
+  "D300",
+  # bad-quotes-inline-string (Q000)
+  "Q000",
+  # bad-quotes-multiline-string (Q001)
+  "Q001",
+  # bad-quotes-docstring (Q002)
+  "Q002",
+  # avoidable-escaped-quote (Q003)
+  "Q003",
+  # missing-trailing-comma (COM812)
+  "COM812",
+  # prohibited-trailing-comma (COM819)
+  "COM819",
+
+  # ===== miscellaneous =====
+
+  # flake8-executable (EXE)
+  # Shebang is present but file is not executable
+  "EXE001",
+
+  # Pyflakes
+  # {name} imported but unused; consider using importlib.util.find_spec to test for availability
+  "F401",
+  # Redefinition of unused {name} from {row}
+  "F811",
+  # Local variable {name} is assigned to but never used
+  "F841",
+]
