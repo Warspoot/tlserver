@@ -4,7 +4,7 @@ import litellm
 from loguru import logger
 from trio_asyncio import aio_as_trio
 
-import tlserver.plugins
+from tlserver import plugins
 from tlserver.translator import Translator
 
 # Load user settings

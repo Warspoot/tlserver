@@ -16,6 +16,7 @@ from quart import request
 from quart_cors import cors
 from quart_trio import QuartTrio
 
+from tlserver.config import AppSettings
 from tlserver.translator import Translator
 from tlserver.translators.llm import LLMTranslator
 from tlserver.translators.offline import OfflineTranslator
@@ -62,23 +63,7 @@ def timed(action):
         logger.info(f"{action} in {tock - tick:.3f}s")
 
 
-@dataclass
-class Settings:
-    current_translator: str
-    port: int
-    host: str
-
-
-settings: Settings
-with open("User-Settings.json", encoding="utf-8") as settings_file:
-    settings_data = json.load(settings_file)["Translation_API_Server"]
-    current_translator = settings_data["current_translator"]
-    settings = Settings(
-        current_translator=current_translator,
-        port=settings_data[current_translator]["HTTP_port_number"],
-        host="0.0.0.0",
-    )
-
+settings = AppSettings()
 logger.info(f"{settings = }")
 
 # ===========================================================
