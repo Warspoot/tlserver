@@ -1,15 +1,17 @@
 import json
 
 import litellm
+from loguru import logger
+from trio_asyncio import aio_as_trio
 
 import plugins
 from translator import Translator
 
 # Load user settings
-with open("User-Settings.json", encoding="utf-8") as file:
-    user_settings = json.load(file)
+with open("User-Settings.json", encoding="utf-8") as settings_file:
+    settings_data = json.load(settings_file)
 
-translator_settings = user_settings["Translation_API_Server"]["LLM"]
+    translator_settings = settings_data["Translation_API_Server"]["LLM"]
 
 
 class LLMTranslator(Translator):
@@ -24,6 +26,7 @@ class LLMTranslator(Translator):
             translator_settings["output_language"]
         ]
         self.model_name = translator_settings["model_name"]
+        self.is_local = translator_settings["is_local"]
         self.api_key = translator_settings["api_key"]
         self.api_server = translator_settings["api_server"]
         self.context_lines = translator_settings["context_lines"]
@@ -33,7 +36,10 @@ class LLMTranslator(Translator):
         self.translator = ""
         self.stop_translation = False
 
-        # process system prompt
+        self._process_system_prompt()
+
+    def _process_system_prompt(self):
+        self.messages = []
         substitutions = {}
         if "{input_language}" in translator_settings["system_prompt"]:
             substitutions["input_language"] = self.input_language
@@ -41,8 +47,11 @@ class LLMTranslator(Translator):
             substitutions["output_language"] = self.output_language
         # Apply formatting safely
         self.system = translator_settings["system_prompt"].format(**substitutions)
-        if self.system:
-            self.messages.append({"role": "system", "content": self.system})
+        self.messages.append({"role": "system", "content": self.system})
+
+    @property
+    def is_ready(self) -> bool:
+        return self.translator_ready_or_not
 
     def pause(self) -> None:
         self.stop_translation = True
@@ -54,11 +63,10 @@ class LLMTranslator(Translator):
         self.translator_ready_or_not = True
         return self.translator_ready_or_not
 
-    def execute(self) -> str | None:
+    async def execute(self) -> str:
         response = ""
-        if any(
-            name in self.model_name for name in ["ollama", "lm_studio", "oobabooga"]
-        ):
+        if self.is_local:
+            # response = await aio_as_trio(litellm.acompletion)(
             response = litellm.completion(
                 model=self.model_name,
                 messages=self.messages,
@@ -66,41 +74,46 @@ class LLMTranslator(Translator):
                 api_base=self.api_server,
                 temperature=self.temperature,
             )
-            for message in self.messages:
-                print(message)
         else:
             response = litellm.completion(
-                model=self.model_name, messages=self.messages, api_key=self.api_key
+                model=self.model_name,
+                messages=self.messages,
+                api_key=self.api_key,
             )
 
-        # response = openai.chat.completions.create(
-        #     model=self.model_name,
-        #     messages=self.messages
-        # )
+        logger.debug("messages: {}", self.messages)
+
         return response.choices[0].message.content
 
-    def translate(self, message: str) -> str:
+    async def _translate(self, message: str) -> str:
         message = plugins.process_input_text(message)
         if self.stop_translation:
             return "Translation is paused at the moment"
         self.messages.append({"role": "user", "content": message})
-        result = self.execute()
+        result = await self.execute()
         self.messages.append({"role": "assistant", "content": result})
         # Ensure only the last 10 user and assistant messages are kept
-        if (
-            len(self.messages) > self.context_lines
-        ):  # 10 user/assistant messages + 1 system message
+        # 10 user/assistant messages + 1 system message
+        if len(self.messages) > self.context_lines:
             self.messages = [self.messages[0]] + self.messages[-10:]
-        result = plugins.process_output_text(result)
+        return plugins.process_output_text(result)
+
+    async def translate(self, message: str) -> str:
+        result = await self._translate(message)
+        logger.info(f"{message!r}   ->   {result!r}")
         return result
 
-    def translate_batch(self, list_of_text_input: list[str]) -> list[str] | str:
+    async def translate_batch(self, list_of_text_input: list[str]) -> list[str]:
         if self.stop_translation:
-            return "Translation is paused at the moment"
+            return ["Translation is paused at the moment"]
         translation_list = []
         for text_input in list_of_text_input:
-            translation = self.translate(text_input)
+            translation = await self._translate(text_input)
             translation_list.append(translation)
+        for original, translated in zip(
+            list_of_text_input, translation_list, strict=True
+        ):
+            logger.info(f"{original!r}   ->   {translated!r}")
         return translation_list
 
     def check_if_language_available(self, language: str) -> bool:
@@ -110,21 +123,8 @@ class LLMTranslator(Translator):
         if self.can_change_language_or_not:
             if self.check_if_language_available(output_language):
                 self.output_language = output_language
-
                 # Replace the system message in the messages list
-                self.messages = []
-                self.system = (
-                    "You are a professional translator whose "
-                    "primary goal is to precisely translate "
-                    f"{self.input_language} to {self.output_language}. You can "
-                    "speak colloquially if it makes the translation more "
-                    f"accurate. Only respond in {self.output_language}. If you "
-                    f"are unsure of a {self.input_language} sentence, still "
-                    "always try your best estimate to respond with a complete "
-                    f"{self.output_language} translation."
-                )
-                self.messages.append({"role": "system", "content": self.system})
-
+                self._process_system_prompt()
                 return f"output language changed to {output_language}"
             return "sorry, translator doesn't have this language"
         return "sorry, this translator can't change languages"
@@ -133,41 +133,8 @@ class LLMTranslator(Translator):
         if self.can_change_language_or_not:
             if self.check_if_language_available(input_language):
                 self.input_language = input_language
-
                 # Replace the system message in the messages list
-                self.messages = []
-                self.system = (
-                    "You are a professional translator whose primary goal is "
-                    f"to precisely translate {self.input_language} to "
-                    f"{self.output_language}. You can speak colloquially if it "
-                    " akes the translation more accurate. Only respond in "
-                    f"{self.output_language}. If you are unsure of a "
-                    f"{self.input_language} sentence, still always try your "
-                    "best estimate to respond with a complete "
-                    f"{self.output_language} translation."
-                )
-                self.messages.append({"role": "system", "content": self.system})
-
+                self._process_system_prompt()
                 return f"input language changed to {input_language}"
             return "sorry, translator doesn't have this language"
         return "sorry, this translator can't change languages"
-
-
-# Initialize the bot
-# chat_gpt = Main_Translator()
-
-# # Usage example
-# if __name__ == "__main__":
-#     # First request
-#     response = chat_gpt.translate("──空気が動いた。")
-#     print("Response 1:", response)
-
-#     chat_gpt.change_output_language("Vietnamese")
-
-#     # Second request
-#     response = chat_gpt.translate("それまでボクを包み込んでいた青白い光が遠のいていく。")
-#     print("Response 2:", response)
-
-#     # Third request
-#     response = chat_gpt.translate("ボクの右腕は、手首から先が剥き出しの機械部品でできている。")
-#     print("Response 3:", response)

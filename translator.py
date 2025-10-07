@@ -1,9 +1,15 @@
 from abc import ABC, abstractmethod
+from typing import overload
 
 
 class Translator(ABC):
     @abstractmethod
     def __init__(self) -> None:
+        pass
+
+    @property
+    @abstractmethod
+    def is_ready(self) -> bool:
         pass
 
     @abstractmethod
@@ -23,11 +29,11 @@ class Translator(ABC):
     #     pass
 
     @abstractmethod
-    def translate(self, message: str) -> str:
+    async def translate(self, message: str) -> str:
         pass
 
     @abstractmethod
-    def translate_batch(self, list_of_text_input: list[str]) -> list[str] | str:
+    async def translate_batch(self, list_of_text_input: list[str]) -> list[str]:
         pass
 
     @abstractmethod

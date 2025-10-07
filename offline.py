@@ -1,7 +1,10 @@
 import json
+from functools import partial
 
 import ctranslate2
 import sentencepiece as spm
+import trio
+from loguru import logger
 
 import plugins
 from translator import Translator
@@ -9,20 +12,20 @@ from translator import Translator
 # ===========================================================
 # INITIALIATION
 # ===========================================================
-user_settings_file = open("User-Settings.json", encoding="utf-8")
-user_settings_data = json.load(user_settings_file)
+with open("User-Settings.json", encoding="utf-8") as settings_file:
+    settings_data = json.load(settings_file)
 
-offline_settings_data = user_settings_data["Translation_API_Server"]["Offline"]
+    offline_settings_data = settings_data["Translation_API_Server"]["Offline"]
 
-port = offline_settings_data["HTTP_port_number"]
-gpu = offline_settings_data["gpu"]
-device = offline_settings_data["device"]  # cuda or cpu
-intra_threads = offline_settings_data["intra_threads"]
-inter_threads = offline_settings_data["inter_threads"]
-beam_size = offline_settings_data["beam_size"]
-repetition_penalty = offline_settings_data["repetition_penalty"]
-silent = offline_settings_data["silent"]
-disable_unk = offline_settings_data["disable_unk"]
+    port = offline_settings_data["HTTP_port_number"]
+    gpu = offline_settings_data["gpu"]
+    device = offline_settings_data["device"]  # cuda or cpu
+    intra_threads = offline_settings_data["intra_threads"]
+    inter_threads = offline_settings_data["inter_threads"]
+    beam_size = offline_settings_data["beam_size"]
+    repetition_penalty = offline_settings_data["repetition_penalty"]
+    silent = offline_settings_data["silent"]
+    disable_unk = offline_settings_data["disable_unk"]
 
 model_dir = "./Sugoi_Model/ct2Model/"
 sp_source_model = "./Sugoi_Model/spmModels/spm.ja.nopretok.model"
@@ -57,6 +60,10 @@ class OfflineTranslator(Translator):
         self.translator: ctranslate2.Translator | None = None
         self.stop_translation = False
 
+    @property
+    def is_ready(self) -> bool:
+        return self.translator_ready_or_not
+
     def pause(self) -> None:
         self.stop_translation = True
 
@@ -73,23 +80,23 @@ class OfflineTranslator(Translator):
         self.translator_ready_or_not = True
         return self.translator_ready_or_not
 
-    def translate(self, message: str) -> str:
+    async def translate(self, message: str) -> str:
         if self.stop_translation:
             return "Translation is paused at the moment"
-
-        if isinstance(message, list):
-            return self.translate_batch(message)
 
         message = plugins.process_input_text(message)
 
-        translated = self.translator.translate_batch(
-            source=tokenize_batch(message, sp_source_model),
-            beam_size=beam_size,
-            num_hypotheses=1,
-            return_alternatives=False,
-            disable_unk=disable_unk,
-            replace_unknowns=False,
-            no_repeat_ngram_size=repetition_penalty,
+        translated = await trio.to_thread.run_sync(
+            partial(
+                self.translator.translate_batch,
+                source=tokenize_batch(message, sp_source_model),
+                beam_size=beam_size,
+                num_hypotheses=1,
+                return_alternatives=False,
+                disable_unk=disable_unk,
+                replace_unknowns=False,
+                no_repeat_ngram_size=repetition_penalty,
+            )
         )
 
         final_result = []
@@ -99,22 +106,24 @@ class OfflineTranslator(Translator):
             )
             final_result.append(detokenized)
 
-        if isinstance(message, list):
-            return final_result
         result = plugins.process_output_text(final_result[0])
+        logger.info(f"{message!r}   ->   {translated!r}")
         return result
 
-    def translate_batch(self, list_of_text_input: list[str]) -> list[str] | str:
+    async def translate_batch(self, list_of_text_input: list[str]) -> list[str]:
         if self.stop_translation:
-            return "Translation is paused at the moment"
-        translated = self.translator.translate_batch(
-            source=tokenize_batch(list_of_text_input, sp_source_model),
-            beam_size=beam_size,
-            num_hypotheses=1,
-            return_alternatives=False,
-            disable_unk=disable_unk,
-            replace_unknowns=False,
-            no_repeat_ngram_size=repetition_penalty,
+            return ["Translation is paused at the moment"]
+        translated = await trio.to_thread.run_sync(
+            partial(
+                self.translator.translate_batch,
+                source=tokenize_batch(list_of_text_input, sp_source_model),
+                beam_size=beam_size,
+                num_hypotheses=1,
+                return_alternatives=False,
+                disable_unk=disable_unk,
+                replace_unknowns=False,
+                no_repeat_ngram_size=repetition_penalty,
+            )
         )
 
         final_result = []
@@ -123,10 +132,9 @@ class OfflineTranslator(Translator):
                 detokenize_batch(result.hypotheses[0], sp_target_model)
             )
             final_result.append(detokenized)
-
-        if isinstance(list_of_text_input, list):
-            return final_result
-        return final_result[0]
+        for original, translated in zip(list_of_text_input, final_result, strict=True):
+            logger.info(f"{original!r}   ->   {translated!r}")
+        return final_result
 
     def check_if_language_available(self, language: str) -> bool:
         return self.supported_languages_list.get(language) is not None
@@ -146,9 +154,3 @@ class OfflineTranslator(Translator):
                 return f"input language changed to {input_language}"
             return "sorry, translator doesn't have this language"
         return "sorry, this translator can't change languages"
-
-
-# sugoi_translator = Sugoi_Translator()
-# sugoi_translator.activate()
-# print(sugoi_translator.change_input_language("Vietnamese"))
-# print(sugoi_translator.translate("たまに閉じているものがあっても、中には何も入っていなかった。"))

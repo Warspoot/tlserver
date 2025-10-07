@@ -5,11 +5,10 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-  "flask~=2.0",
-  "waitress~=2.1",
-
+  "loguru~=0.7",
   "quart~=0.18",
   "trio~=0.22",
+  "trio-asyncio~=0.15",
   "quart-trio~=0.10",
   "quart-cors~=0.8",
   "hypercorn~=0.14",
@@ -21,6 +20,9 @@ dependencies = [
   "litellm~=1.67",
   "ctranslate2~=4.2",
   "sentencepiece~=0.1",
+  # thanks litellm...
+  # "orjson",
+  # "fastapi",
 ]
 
 [tool.uv.sources]
