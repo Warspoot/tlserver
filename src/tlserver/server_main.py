@@ -16,9 +16,9 @@ from quart import request
 from quart_cors import cors
 from quart_trio import QuartTrio
 
-from llm import LLMTranslator
-from offline import OfflineTranslator
-from translator import Translator
+from tlserver.translator import Translator
+from tlserver.translators.llm import LLMTranslator
+from tlserver.translators.offline import OfflineTranslator
 
 # ===========================================================
 # INITIALIATION

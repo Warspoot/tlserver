@@ -4,8 +4,8 @@ import litellm
 from loguru import logger
 from trio_asyncio import aio_as_trio
 
-import plugins
-from translator import Translator
+import tlserver.plugins
+from tlserver.translator import Translator
 
 # Load user settings
 with open("User-Settings.json", encoding="utf-8") as settings_file:

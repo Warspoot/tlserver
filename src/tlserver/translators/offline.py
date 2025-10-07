@@ -6,8 +6,8 @@ import sentencepiece as spm
 import trio
 from loguru import logger
 
-import plugins
-from translator import Translator
+import tlserver.plugins
+from tlserver.translator import Translator
 
 # ===========================================================
 # INITIALIATION
