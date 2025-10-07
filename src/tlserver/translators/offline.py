@@ -7,25 +7,12 @@ import trio
 from loguru import logger
 
 from tlserver import plugins
+from tlserver.config import OfflineTranslatorSettings
 from tlserver.translator import Translator
 
 # ===========================================================
 # INITIALIATION
 # ===========================================================
-with open("User-Settings.json", encoding="utf-8") as settings_file:
-    settings_data = json.load(settings_file)
-
-    offline_settings_data = settings_data["Translation_API_Server"]["Offline"]
-
-    port = offline_settings_data["HTTP_port_number"]
-    gpu = offline_settings_data["gpu"]
-    device = offline_settings_data["device"]  # cuda or cpu
-    intra_threads = offline_settings_data["intra_threads"]
-    inter_threads = offline_settings_data["inter_threads"]
-    beam_size = offline_settings_data["beam_size"]
-    repetition_penalty = offline_settings_data["repetition_penalty"]
-    silent = offline_settings_data["silent"]
-    disable_unk = offline_settings_data["disable_unk"]
 
 model_dir = "./Sugoi_Model/ct2Model/"
 sp_source_model = "./Sugoi_Model/spmModels/spm.ja.nopretok.model"
@@ -51,12 +38,11 @@ def detokenize_batch(text: list[list[str]], sp_target_model: str) -> list[str]:
 
 
 class OfflineTranslator(Translator):
-    def __init__(self) -> None:
+    def __init__(self, config: OfflineTranslatorSettings) -> None:
+        self.config = config
+
         self.translator_ready_or_not = False
         self.can_change_language_or_not = False
-        self.supported_languages_list = {"English": "English", "Japanese": "Japanese"}
-        self.input_language = self.supported_languages_list["Japanese"]
-        self.output_language = self.supported_languages_list["English"]
         self.translator: ctranslate2.Translator | None = None
         self.stop_translation = False
 
@@ -73,9 +59,9 @@ class OfflineTranslator(Translator):
     def activate(self) -> bool:
         self.translator = ctranslate2.Translator(
             model_dir,
-            device=device,
-            intra_threads=intra_threads,
-            inter_threads=inter_threads,
+            device=self.config.device,
+            intra_threads=self.config.intra_threads,
+            inter_threads=self.config.inter_threads,
         )
         self.translator_ready_or_not = True
         return self.translator_ready_or_not
@@ -90,12 +76,12 @@ class OfflineTranslator(Translator):
             partial(
                 self.translator.translate_batch,
                 source=tokenize_batch(message, sp_source_model),
-                beam_size=beam_size,
+                beam_size=self.config.beam_size,
                 num_hypotheses=1,
                 return_alternatives=False,
-                disable_unk=disable_unk,
+                disable_unk=self.config.disable_unk,
                 replace_unknowns=False,
-                no_repeat_ngram_size=repetition_penalty,
+                no_repeat_ngram_size=self.config.repetition_penalty,
             )
         )
 
@@ -117,12 +103,12 @@ class OfflineTranslator(Translator):
             partial(
                 self.translator.translate_batch,
                 source=tokenize_batch(list_of_text_input, sp_source_model),
-                beam_size=beam_size,
+                beam_size=self.config.beam_size,
                 num_hypotheses=1,
                 return_alternatives=False,
-                disable_unk=disable_unk,
+                disable_unk=self.config.disable_unk,
                 replace_unknowns=False,
-                no_repeat_ngram_size=repetition_penalty,
+                no_repeat_ngram_size=self.config.repetition_penalty,
             )
         )
 
@@ -137,12 +123,12 @@ class OfflineTranslator(Translator):
         return final_result
 
     def check_if_language_available(self, language: str) -> bool:
-        return self.supported_languages_list.get(language) is not None
+        return self.config.supported_languages.get(language) is not None
 
     def change_output_language(self, output_language: str) -> str:
         if self.can_change_language_or_not:
             if self.check_if_language_available(output_language):
-                self.output_language = output_language
+                self.config.output_language = output_language
                 return f"output language changed to {output_language}"
             return "sorry, translator doesn't have this language"
         return "sorry, this translator can't change languages"
@@ -150,7 +136,7 @@ class OfflineTranslator(Translator):
     def change_input_language(self, input_language: str) -> str:
         if self.can_change_language_or_not:
             if self.check_if_language_available(input_language):
-                self.input_language = input_language
+                self.config.input_language = input_language
                 return f"input language changed to {input_language}"
             return "sorry, translator doesn't have this language"
         return "sorry, this translator can't change languages"
