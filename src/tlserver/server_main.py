@@ -18,6 +18,7 @@ from quart_cors import cors
 from quart_trio import QuartTrio
 
 from tlserver.config import AppSettings
+from tlserver.handler import LegacyTranslatorHandler
 from tlserver.translator import Translator
 from tlserver.translators.llm import LLMTranslator
 from tlserver.translators.offline import OfflineTranslator
@@ -54,76 +55,6 @@ class InterceptHandler(logging.Handler):
 logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
 
 
-@contextmanager
-def timed(action):
-    tick = monotonic()
-    try:
-        yield
-    finally:
-        tock = monotonic()
-        logger.info(f"{action} in {tock - tick:.3f}s")
-
-
-def translator_handler(translator: Translator) -> Callable[[], Awaitable[Response]]:
-    translator.activate()
-
-    async def receive_command() -> Response:
-        with logger.contextualize(uid=uuid.uuid4()), timed("command handled") as _:
-            data = await request.get_json(force=True)
-            message: str = data.get("message")
-            content = data.get("content")
-
-            logger.info(f"received command '{message}'  |  {content}")
-
-            # special case for legacy support
-            if message == "translate sentences" and isinstance(content, list):
-                logger.debug(
-                    "legacy support: translate single sentence converted to batch translate"
-                )
-                message = "translate batch"
-
-            response = None
-
-            match message:
-                case "close server":
-                    die.set()
-
-                case "check if server is ready":
-                    response = translator.is_ready
-
-                case "translate sentences":
-                    if isinstance(content, str):
-                        with timed("translated") as _:
-                            translation = await translator.translate(content)
-                        response = translation
-
-                case "translate batch":
-                    if isinstance(content, list):
-                        with timed("batch translated") as _:
-                            translation = await translator.translate_batch(content)
-                        response = translation
-
-                case "change input language":
-                    if isinstance(content, str):
-                        response = translator.change_input_language(content)
-
-                case "change output language":
-                    if isinstance(content, str):
-                        response = translator.change_output_language(content)
-
-                case "pause":
-                    response = translator.pause()
-
-                case "resume":
-                    response = translator.resume()
-
-            logger.info("response: {}", response)
-
-            return quart.json.jsonify(response)
-
-    return receive_command
-
-
 # ===========================================================
 # MAIN APPLICATION
 # ===========================================================
@@ -145,12 +76,11 @@ app = cors(app, allow_origin="*")
 die = trio.Event()
 
 # man why the hell does sugoi do per-port translators
-TranslatorHandler = Callable[[], Awaitable[Response]]
-handlers: dict[int, TranslatorHandler] = {}
+handlers: dict[int, LegacyTranslatorHandler] = {}
 for translator_config in config.translators:
     translator_cls = TRANSLATOR_CLASSES[translator_config.kind]
     if translator_cls:
-        handlers[translator_config.port] = translator_handler(
+        handlers[translator_config.port] = LegacyTranslatorHandler(
             translator_cls(translator_config)
         )
 
@@ -164,7 +94,7 @@ async def dispatch() -> Response:
         return Response(
             f"No plugin for port {port}\n", status=404, mimetype="text/plain"
         )
-    return await handler()
+    return await handler.receive_command()
 
 
 @app.before_serving

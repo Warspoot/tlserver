@@ -29,6 +29,8 @@ class _BaseModel(BaseModel):
 
 class TranslatorSettingsBase(_BaseModel):
     enabled: bool = True
+    # in the future, we will want new handler versions
+    handler_kind: Literal["legacy"] = "legacy"
     port: Annotated[int, Gt(0), Lt(65536)]
     input_language: str = "Japanese"
     output_language: str = "English"
