@@ -130,7 +130,7 @@ async def serve_handler(port: int) -> None:
         logger.debug("hypercorn stopping")
 
 
-async def main() -> None:
+async def amain() -> None:
     trio_token = trio.lowlevel.current_trio_token()
 
     def _handle_shutdown(signum: int, _frame: object) -> None:
@@ -152,5 +152,5 @@ async def main() -> None:
             nursery.start_soon(serve_handler, port)
 
 
-if __name__ == "__main__":
-    trio.run(main)
+def main() -> None:
+    trio.run(amain)
