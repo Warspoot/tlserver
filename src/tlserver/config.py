@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from annotated_types import Gt, Lt
+from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, field_validator
 from pydantic_settings import (
     BaseSettings,
@@ -191,36 +192,53 @@ class AppSettings(BaseSettings):
 
 
 def get_executable_dir() -> Path | None:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent
+    executable_path = None
+    if not executable_path and getattr(sys, "frozen", False):
+        executable_path = Path(sys.executable).resolve().parent
+        logger.debug("frozen executable, executable at {}", executable_path)
     # i think this one is scuffed
-    if hasattr(sys.modules.get("__main__"), "__file__"):
-        return Path(sys.modules["__main__"].__file__).resolve().parent
-    return None
+    if not executable_path and hasattr(sys.modules.get("__main__"), "__file__"):
+        executable_path = Path(sys.modules["__main__"].__file__).resolve().parent
+        logger.debug("__main__, executable at {}", executable_path)
+    return executable_path
 
 
 def find_config_path() -> Path | None:
-    env_path = os.getenv("TLSERVER_CONFIG_PATH")
-    if env_path:
-        p = Path(env_path).expanduser()
-        if p.is_file():
-            return p
+    config_path = None
 
-    if xdg := os.getenv("XDG_CONFIG_HOME"):
-        p = Path(xdg) / "tlserver" / "config.toml"
-        if p.is_file():
-            return p
+    if not config_path:
+        logger.debug("resolving env vars")
+        env_path = os.getenv("TLSERVER_CONFIG_PATH")
+        if env_path:
+            p = Path(env_path).expanduser()
+            if p.is_file():
+                config_path = p
+                logger.debug("config at {}", config_path)
 
-    if appdata := os.getenv("APPDATA"):
-        p = Path(appdata) / "tlserver" / "config.toml"
-        if p.is_file():
-            return p
+    if not config_path:
+        logger.debug("resolving xdg config home")
+        if xdg := os.getenv("XDG_CONFIG_HOME"):
+            p = Path(xdg) / "tlserver" / "config.toml"
+            if p.is_file():
+                config_path = p
+                logger.debug("config at {}", config_path)
 
-    local = Path.cwd() / "config.toml"
-    if local.is_file():
-        return local
+    if not config_path:
+        logger.debug("resolving appdata")
+        if appdata := os.getenv("APPDATA"):
+            p = Path(appdata) / "tlserver" / "config.toml"
+            if p.is_file():
+                config_path = p
+                logger.debug("config at {}", config_path)
 
-    return None
+    if not config_path:
+        logger.debug("resolving cwd")
+        local = Path.cwd() / "config.toml"
+        if local.is_file():
+            config_path = local
+            logger.debug("config at {}", config_path)
+
+    return config_path
 
 
 class TOMLConfigSettingsSource(PydanticBaseSettingsSource):

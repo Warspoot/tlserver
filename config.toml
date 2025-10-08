@@ -1,0 +1,7 @@
+debug = true
+
+[[translators]]
+kind = "Offline"
+
+[[translators]]
+kind = "LLM"

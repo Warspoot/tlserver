@@ -1,10 +1,12 @@
 from abc import ABC, abstractmethod
 from typing import overload
 
+from tlserver.config import TranslatorSettingsBase
+
 
 class Translator(ABC):
     @abstractmethod
-    def __init__(self) -> None:
+    def __init__(self, config: TranslatorSettingsBase) -> None:
         pass
 
     @property
