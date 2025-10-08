@@ -8,7 +8,16 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from annotated_types import Gt, Lt
 from loguru import logger
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, SecretStr, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    DirectoryPath,
+    Field,
+    FilePath,
+    HttpUrl,
+    SecretStr,
+    field_validator,
+)
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -55,6 +64,14 @@ class OfflineTranslatorSettings(TranslatorSettingsBase):
     repetition_penalty: int = 3
     silent: bool = False
     disable_unk: bool = True
+
+    translate_model_path: DirectoryPath = Path("./assets/models/translate/")
+    tok_source_model_path: FilePath = Path(
+        "./assets/models/tokenise/spm.ja.nopretok.model"
+    )
+    tok_target_model_path: FilePath = Path(
+        "./assets/models/tokenise/spm.en.nopretok.model"
+    )
 
 
 class GoogleTranslatorSettings(TranslatorSettingsBase):

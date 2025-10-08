@@ -14,10 +14,6 @@ from tlserver.translator import Translator
 # INITIALIATION
 # ===========================================================
 
-model_dir = "./Sugoi_Model/ct2Model/"
-sp_source_model = "./Sugoi_Model/spmModels/spm.ja.nopretok.model"
-sp_target_model = "./Sugoi_Model/spmModels/spm.en.nopretok.model"
-
 # ===========================================================
 # MAIN APPLICATION
 # ===========================================================
@@ -58,7 +54,7 @@ class OfflineTranslator(Translator):
 
     def activate(self) -> bool:
         self.translator = ctranslate2.Translator(
-            model_dir,
+            str(self.config.translate_model_path),
             device=self.config.device,
             intra_threads=self.config.intra_threads,
             inter_threads=self.config.inter_threads,
@@ -75,7 +71,7 @@ class OfflineTranslator(Translator):
         translated = await trio.to_thread.run_sync(
             partial(
                 self.translator.translate_batch,
-                source=tokenize_batch(message, sp_source_model),
+                source=tokenize_batch(message, str(self.config.tok_source_model_path)),
                 beam_size=self.config.beam_size,
                 num_hypotheses=1,
                 return_alternatives=False,
@@ -88,7 +84,9 @@ class OfflineTranslator(Translator):
         final_result = []
         for result in translated:
             detokenized = "".join(
-                detokenize_batch(result.hypotheses[0], sp_target_model)
+                detokenize_batch(
+                    result.hypotheses[0], str(self.config.tok_target_model_path)
+                )
             )
             final_result.append(detokenized)
 
@@ -102,7 +100,9 @@ class OfflineTranslator(Translator):
         translated = await trio.to_thread.run_sync(
             partial(
                 self.translator.translate_batch,
-                source=tokenize_batch(list_of_text_input, sp_source_model),
+                source=tokenize_batch(
+                    list_of_text_input, str(self.config.tok_source_model_path)
+                ),
                 beam_size=self.config.beam_size,
                 num_hypotheses=1,
                 return_alternatives=False,
@@ -115,7 +115,9 @@ class OfflineTranslator(Translator):
         final_result = []
         for result in translated:
             detokenized = "".join(
-                detokenize_batch(result.hypotheses[0], sp_target_model)
+                detokenize_batch(
+                    result.hypotheses[0], str(self.config.tok_target_model_path)
+                )
             )
             final_result.append(detokenized)
         for original, translated in zip(list_of_text_input, final_result, strict=True):
