@@ -4,7 +4,7 @@ import logging
 import signal
 import uuid
 from collections.abc import Awaitable, Callable
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from io import StringIO
 from time import monotonic
@@ -90,11 +90,13 @@ handlers: dict[int, LegacyTranslatorHandler] = {}
 for translator_config in config.translators:
     translator_cls = TRANSLATOR_CLASSES[translator_config.kind]
     if translator_cls:
-        handlers[translator_config.port] = LegacyTranslatorHandler(
-            translator_cls(translator_config)
-        )
+        with suppress(Exception):
+            handlers[translator_config.port] = LegacyTranslatorHandler(
+                translator_cls(translator_config)
+            )
 
 
+# TODO: custom router instead?
 @app.route("/", methods=["POST", "GET"])
 async def dispatch() -> Response:
     # ASGI server info (host, port)
