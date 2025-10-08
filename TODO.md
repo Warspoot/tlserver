@@ -1,0 +1,8 @@
+- github actions
+  - build pyinstaller exe
+- precommit
+  - lint and format
+- modern handler (death to separate ports per translator)
+- remove or refactor plugins.py
+- llm batching using structured outputs
+- rest of translators (google deepl)
