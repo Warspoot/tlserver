@@ -6,6 +6,7 @@ import uuid
 from collections.abc import Awaitable, Callable
 from contextlib import contextmanager
 from dataclasses import dataclass
+from io import StringIO
 from time import monotonic
 
 import quart
@@ -16,6 +17,8 @@ from loguru import logger
 from quart import Response, request
 from quart_cors import cors
 from quart_trio import QuartTrio
+from rich.console import Console
+from rich.pretty import Pretty
 
 from tlserver.config import AppSettings
 from tlserver.handler import LegacyTranslatorHandler
@@ -26,6 +29,13 @@ from tlserver.translators.offline import OfflineTranslator
 # ===========================================================
 # INITIALIATION
 # ===========================================================
+
+
+def rich_str(obj) -> str:
+    buf = StringIO()
+    console = Console(file=buf, force_terminal=True, color_system="truecolor")
+    console.print(Pretty(obj))
+    return buf.getvalue().rstrip()
 
 
 class InterceptHandler(logging.Handler):
@@ -69,7 +79,7 @@ TRANSLATOR_CLASSES: dict[str, type[Translator] | None] = {
 
 
 config = AppSettings()
-logger.info(f"{config = }")
+logger.info(f"Config loaded:\n{rich_str(config.model_dump())}")
 
 app = QuartTrio(__name__)
 app = cors(app, allow_origin="*")
