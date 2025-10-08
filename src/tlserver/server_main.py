@@ -65,6 +65,8 @@ def timed(action):
 
 
 def translator_handler(translator: Translator) -> Callable[[], Awaitable[Response]]:
+    translator.activate()
+
     async def receive_command() -> Response:
         with logger.contextualize(uid=uuid.uuid4()), timed("command handled") as _:
             data = await request.get_json(force=True)

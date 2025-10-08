@@ -54,7 +54,7 @@ class LLMTranslator(Translator):
                 model=self.config.model_name,
                 messages=self.messages,
                 api_key=self.config.api_key.get_secret_value(),
-                api_base=self.config.api_server,
+                api_base=str(self.config.api_server),
                 temperature=self.config.temperature,
             )
         else:
