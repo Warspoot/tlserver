@@ -206,7 +206,7 @@ class AppSettings(BaseSettings):
         ports = [t.port for t in translators]
         duplicates = {p for p in ports if ports.count(p) > 1}
         if duplicates:
-            raise ValueError(f"Duplicate plugin ports detected: {sorted(duplicates)}")
+            raise ValueError(f"Duplicate plugin ports detected: {sorted(duplicates)}")  # noqa: TRY003
         return translators
 
 
@@ -223,41 +223,25 @@ def get_executable_dir() -> Path | None:
 
 
 def find_config_path() -> Path | None:
-    config_path = None
+    candidates: list[tuple[str, Path]] = []
+    if env := os.getenv("TLSERVER_CONFIG_PATH"):
+        candidates.append(("env TLSERVER_CONFIG_PATH", Path(env).expanduser()))
+    if xdg := os.getenv("XDG_CONFIG_HOME"):
+        candidates.append(("xdg config home", Path(xdg) / "tlserver" / "config.toml"))
+    if appdt := os.getenv("APPDATA"):
+        candidates.append(("appdata", Path(appdt) / "tlserver" / "config.toml"))
+    candidates.append(("cwd", Path.cwd() / "config.toml"))
 
-    if not config_path:
-        logger.debug("resolving env vars")
-        env_path = os.getenv("TLSERVER_CONFIG_PATH")
-        if env_path:
-            p = Path(env_path).expanduser()
+    for label, p in candidates:
+        logger.debug("resolving {} -> {}", label, p)
+        try:
             if p.is_file():
-                config_path = p
-                logger.debug("config at {}", config_path)
+                logger.debug("config at {}", p)
+                return p
+        except OSError:
+            logger.debug("invalid path for {}: {}", label, p)
 
-    if not config_path:
-        logger.debug("resolving xdg config home")
-        if xdg := os.getenv("XDG_CONFIG_HOME"):
-            p = Path(xdg) / "tlserver" / "config.toml"
-            if p.is_file():
-                config_path = p
-                logger.debug("config at {}", config_path)
-
-    if not config_path:
-        logger.debug("resolving appdata")
-        if appdata := os.getenv("APPDATA"):
-            p = Path(appdata) / "tlserver" / "config.toml"
-            if p.is_file():
-                config_path = p
-                logger.debug("config at {}", config_path)
-
-    if not config_path:
-        logger.debug("resolving cwd")
-        local = Path.cwd() / "config.toml"
-        if local.is_file():
-            config_path = local
-            logger.debug("config at {}", config_path)
-
-    return config_path
+    return None
 
 
 class TOMLConfigSettingsSource(PydanticBaseSettingsSource):
