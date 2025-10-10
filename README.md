@@ -23,13 +23,13 @@ uv run tlserver
 python -m tlserver
 ```
 
-# Configure
+## Configure
 tlserver loads settings in this order:
 1. TLSERVER_CONFIG_PATH environment variable
 2. %APPDATA%\tlserver\config.toml
 3. Current working directory (config.toml)
 
-# Troubleshooting
+## Troubleshooting
 - Keep `debug = true` while testing to see detailed logs.
 - If ports collide or config is invalid, tlserver will crash with a validation error.
 - Ensure the referenced model/tokenizer files exist; the offline translator will fail to start if they are missing.
