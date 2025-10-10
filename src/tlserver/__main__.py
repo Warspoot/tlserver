@@ -94,18 +94,17 @@ for translator_config in config.translators:
 @app.route("/", methods=["POST", "GET"])
 async def dispatch() -> Response:
     # ASGI server info (host, port)
-    # wow i love python is there no better way to do this
-    port = handler = None
-    server: tuple[str, int | None] | None = request.scope.get("server", None)
-    if server is not None:
-        port: int | None = server[1]
-    if port is not None:
-        handler = handlers.get(port)
-    if handler is None:
-        return Response(
-            f"No plugin for port {port}\n", status=404, mimetype="text/plain"
-        )
-    return await handler.receive_command()
+    match request.scope.get("server"):
+        case (_, int(port)):
+            if handler := handlers.get(port):
+                return await handler.receive_command()
+            return Response(
+                f"No plugin for port {port}\n", status=404, mimetype="text/plain"
+            )
+        case _:
+            return Response(
+                "Unable to determine request port\n", status=404, mimetype="text/plain"
+            )
 
 
 @app.before_serving
