@@ -28,6 +28,7 @@ tlserver loads settings in this order:
 1. TLSERVER_CONFIG_PATH environment variable
 2. `XDG_CONFIG_HOME/tlserver/config.toml` or `%APPDATA%\tlserver\config.toml`
 3. Current working directory (`./config.toml`)
+
 A sample configuration file can be found in `config.sample.toml`
 
 ## Troubleshooting
