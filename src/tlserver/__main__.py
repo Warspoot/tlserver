@@ -118,23 +118,6 @@ async def on_stop() -> None:
     logger.info("Goodbye, shutting down.")
 
 
-async def serve_handler(port: int) -> None:
-    config = Config.from_mapping(
-        bind=[f"0.0.0.0:{port}"],
-        errorlog=None,
-    )
-
-    logger.debug("hypercorn serving")
-    try:
-        await serve(
-            app,
-            config,
-            shutdown_trigger=die.wait,
-        )
-    finally:
-        logger.debug("hypercorn stopping")
-
-
 async def amain() -> None:
     trio_token = trio.lowlevel.current_trio_token()
 
@@ -152,9 +135,20 @@ async def amain() -> None:
                 logger.warning("Ignored error: {}", e)
                 continue
 
-    async with trio.open_nursery() as nursery:
-        for port in handlers:
-            nursery.start_soon(serve_handler, port)
+    config = Config.from_mapping(
+        bind=[f"0.0.0.0:{port}" for port in handlers],
+        errorlog=None,
+    )
+
+    logger.debug("hypercorn serving")
+    try:
+        await serve(
+            app,
+            config,
+            shutdown_trigger=die.wait,
+        )
+    finally:
+        logger.debug("hypercorn stopping")
 
 
 def main() -> None:
