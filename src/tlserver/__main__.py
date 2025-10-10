@@ -25,7 +25,7 @@ from tlserver.translators.offline import OfflineTranslator
 # ===========================================================
 
 
-def rich_str(obj) -> str:
+def rich_str(obj: object) -> str:
     buf = StringIO()
     console = Console(file=buf, force_terminal=True, color_system="truecolor")
     console.print(Pretty(obj))
@@ -94,8 +94,13 @@ for translator_config in config.translators:
 @app.route("/", methods=["POST", "GET"])
 async def dispatch() -> Response:
     # ASGI server info (host, port)
-    host, port = request.scope.get("server", ("", 0))
-    handler = handlers.get(port)
+    # wow i love python is there no better way to do this
+    port = handler = None
+    server: tuple[str, int | None] | None = request.scope.get("server", None)
+    if server is not None:
+        port: int | None = server[1]
+    if port is not None:
+        handler = handlers.get(port)
     if handler is None:
         return Response(
             f"No plugin for port {port}\n", status=404, mimetype="text/plain"
