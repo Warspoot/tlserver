@@ -1,0 +1,66 @@
+# config.toml - copy to the same folder as tlserver.exe (or set TLSERVER_CONFIG_PATH)
+
+# Turn on extra logging to help when something goes wrong.
+debug = false
+
+# ------------------------------------------------------------
+# Offline translator: uses the bundled neural models on CPU/GPU
+# ------------------------------------------------------------
+[[translators]]
+kind = "Offline"
+enabled = true
+port = 14366             # Must be unique across all translators
+input_language = "Japanese"
+output_language = "English"
+
+# Only override these if you know what you're doing:
+# translate_model_path = "./assets/models/translate/"
+# gpu = false            # Set true to force GPU (if available)
+# device = "cpu"         # e.g. "cuda:0" for NVIDIA GPUs
+# beam_size = 5          # Higher = better quality, slower
+
+# ------------------------------------------------------------
+# Google translator: calls Google’s public web API
+# ------------------------------------------------------------
+[[translators]]
+kind = "Google"
+enabled = false          # Set true to start it
+port = 14367
+input_language = "Japanese"
+output_language = "English"
+
+# You can switch languages by picking from the supported codes:
+# supported_languages = { English = "en", Japanese = "ja", Korean = "ko", ... }
+
+# ------------------------------------------------------------
+# DeepL translator: automates the DeepL website in a headless browser
+# ------------------------------------------------------------
+[[translators]]
+kind = "DeepL"
+enabled = false
+port = 14369
+input_language = "Japanese"
+output_language = "English"
+
+# If DeepL changes their site, tweak these selectors:
+# input_textbox_id = "[data-testid=translator-source-input]"
+# result_textbox_id = "[data-testid=translator-target-input]"
+
+# ------------------------------------------------------------
+# LLM translator: sends text to a local/remote language model server
+# ------------------------------------------------------------
+[[translators]]
+kind = "LLM"
+enabled = false
+port = 14368
+input_language = "Japanese"
+output_language = "English"
+is_local = true
+model_name = "lm_studio/sugoi14b"
+api_server = "http://127.0.0.1:1234/v1"
+api_key = "sk-fakefakefake"
+
+# Adjust the tone/creativity of responses:
+# temperature = 0.4
+# system_prompt = "You are a professional translator..."
+# context_lines = 50      # How much recent chat to send with each request
