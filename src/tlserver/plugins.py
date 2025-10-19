@@ -1,4 +1,5 @@
-import re
+# TODO: refactor this so that the user can configure this in config
+# for now this does nothing
 
 
 def filter_text(extracted_text: str) -> str:
