@@ -9,27 +9,17 @@ from tlserver import plugins
 from tlserver.config import OfflineTranslatorSettings
 from tlserver.translator import Translator
 
-# ===========================================================
-# INITIALIATION
-# ===========================================================
-
-# ===========================================================
-# MAIN APPLICATION
-# ===========================================================
-
-# translator = ctranslate2.Translator(modelDir, device=device, intra_threads=intra_threads, inter_threads=inter_threads)
-
 
 def tokenize_batch(text: list[str] | str, sp_source_model: str) -> list[list[str]]:
-    sp = spm.SentencePieceProcessor(sp_source_model)  # type: ignore
+    sp = spm.SentencePieceProcessor(sp_source_model)  # pyright: ignore[reportCallIssue]
     if isinstance(text, list):
-        return sp.encode(text, out_type=str)  # type: ignore
-    return [sp.encode(text, out_type=str)]  # type: ignore
+        return sp.encode(text, out_type=str)  # pyright: ignore[reportAttributeAccessIssue]
+    return [sp.encode(text, out_type=str)]  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def detokenize_batch(text: list[list[str]], sp_target_model: str) -> list[str]:
-    sp = spm.SentencePieceProcessor(sp_target_model)  # type: ignore
-    return sp.decode(text)  # type: ignore
+    sp = spm.SentencePieceProcessor(sp_target_model)  # pyright: ignore[reportCallIssue]
+    return sp.decode(text)  # pyright: ignore[reportAttributeAccessIssue]
 
 
 class OfflineTranslator(Translator):
@@ -69,14 +59,14 @@ class OfflineTranslator(Translator):
 
         translated = await trio.to_thread.run_sync(
             partial(
-                self.translator.translate_batch,
+                self.translator.translate_batch,  # pyright: ignore[reportOptionalMemberAccess]
                 source=tokenize_batch(message, str(self.config.tok_source_model_path)),
                 beam_size=self.config.beam_size,
                 num_hypotheses=1,
                 return_alternatives=False,
                 disable_unk=self.config.disable_unk,
                 replace_unknowns=False,
-                no_repeat_ngram_size=self.config.repetition_penalty,
+                repetition_penalty=self.config.repetition_penalty,
             )
         )
 
@@ -98,7 +88,7 @@ class OfflineTranslator(Translator):
             return ["Translation is paused at the moment"]
         translated = await trio.to_thread.run_sync(
             partial(
-                self.translator.translate_batch,
+                self.translator.translate_batch,  # pyright: ignore[reportOptionalMemberAccess]
                 source=tokenize_batch(
                     list_of_text_input, str(self.config.tok_source_model_path)
                 ),
@@ -107,7 +97,7 @@ class OfflineTranslator(Translator):
                 return_alternatives=False,
                 disable_unk=self.config.disable_unk,
                 replace_unknowns=False,
-                no_repeat_ngram_size=self.config.repetition_penalty,
+                repetition_penalty=self.config.repetition_penalty,
             )
         )
 

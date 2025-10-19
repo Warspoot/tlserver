@@ -1,4 +1,7 @@
+from functools import partial
+
 import litellm
+import trio
 from loguru import logger
 
 from tlserver import plugins
@@ -7,7 +10,7 @@ from tlserver.translator import Translator
 
 
 class LLMTranslator(Translator):
-    def __init__(self, config: LLMTranslatorSettings):
+    def __init__(self, config: LLMTranslatorSettings) -> None:
         self.config = config
 
         self.translator_ready_or_not = False
@@ -15,10 +18,11 @@ class LLMTranslator(Translator):
         self.messages = []
         self.translator = ""
         self.stop_translation = False
+        self.system_prompt = self.config.system_prompt
 
         self._process_system_prompt()
 
-    def _process_system_prompt(self):
+    def _process_system_prompt(self) -> None:
         self.messages = []
         substitutions = {}
         if "{input_language}" in self.config.system_prompt:
@@ -26,8 +30,8 @@ class LLMTranslator(Translator):
         if "{output_language}" in self.config.system_prompt:
             substitutions["output_language"] = self.config.output_language
         # Apply formatting safely
-        self.config.system_prompt = self.config.system_prompt.format(**substitutions)
-        self.messages.append({"role": "system", "content": self.config.system_prompt})
+        self.system_prompt = self.config.system_prompt.format(**substitutions)
+        self.messages.append({"role": "system", "content": self.system_prompt})
 
     @property
     def is_ready(self) -> bool:
@@ -44,22 +48,16 @@ class LLMTranslator(Translator):
         return self.translator_ready_or_not
 
     async def execute(self) -> str:
-        response = ""
+        kwargs = {
+            "model": self.config.model_name,
+            "messages": self.messages,
+            "api_key": self.config.api_key.get_secret_value(),
+            "temperature": self.config.temperature,
+        }
         if self.config.is_local:
-            # response = await aio_as_trio(litellm.acompletion)(
-            response = litellm.completion(
-                model=self.config.model_name,
-                messages=self.messages,
-                api_key=self.config.api_key.get_secret_value(),
-                api_base=str(self.config.api_server),
-                temperature=self.config.temperature,
-            )
-        else:
-            response = litellm.completion(
-                model=self.config.model_name,
-                messages=self.messages,
-                api_key=self.config.api_key.get_secret_value(),
-            )
+            kwargs["api_base"] = str(self.config.api_server)
+
+        response = await trio.to_thread.run_sync(partial(litellm.completion, **kwargs))
 
         logger.debug("messages: {}", self.messages)
 
@@ -75,7 +73,10 @@ class LLMTranslator(Translator):
         # Ensure only the last 10 user and assistant messages are kept
         # 10 user/assistant messages + 1 system message
         if len(self.messages) > self.config.context_lines:
-            self.messages = [self.messages[0]] + self.messages[-10:]
+            self.messages = [
+                self.messages[0],
+                *self.messages[-self.config.context_lines :],
+            ]
         return plugins.process_output_text(result)
 
     async def translate(self, message: str) -> str:
