@@ -30,10 +30,6 @@ class Translator(ABC, Generic[ConfigT]):
     def activate(self) -> bool:
         pass
 
-    # @abstractmethod
-    # def execute(self) -> str | None:
-    #     pass
-
     @abstractmethod
     async def translate(self, message: str) -> str:
         pass

@@ -38,13 +38,6 @@ if TYPE_CHECKING:
     from pydantic.fields import FieldInfo
 
 
-# TODO: refactor again
-#   handlers: port mapping to translator for legacy, or path for modern
-#     legacy has no path but port
-#     modern has both path and port but only maps paths (only one port)
-#   translators: as is now
-
-
 class HasPort(Protocol):
     port: int
 

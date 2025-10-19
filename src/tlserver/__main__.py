@@ -26,10 +26,6 @@ from tlserver.translator import Translator
 from tlserver.translators.llm import LLMTranslator
 from tlserver.translators.offline import OfflineTranslator
 
-# ===========================================================
-# INITIALIATION
-# ===========================================================
-
 
 def rich_str(obj: object) -> str:
     buf = StringIO()
@@ -63,11 +59,6 @@ class InterceptHandler(logging.Handler):
 
 
 logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
-
-
-# ===========================================================
-# MAIN APPLICATION
-# ===========================================================
 
 
 TRANSLATOR_CLASSES: dict[str, type[Translator] | None] = {
