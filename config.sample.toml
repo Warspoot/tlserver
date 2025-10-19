@@ -2,6 +2,8 @@
 
 # Turn on extra logging to help when something goes wrong.
 debug = false
+# The port where the new-style API server will run
+root_port = 8080
 
 # ------------------------------------------------------------
 # Offline translator: uses the bundled neural models on CPU/GPU

@@ -1,21 +1,27 @@
 import inspect
 import logging
 import signal
-from contextlib import suppress
+import sys
+from collections.abc import Sequence
 from io import StringIO
+from typing import Literal, overload
 
 import trio
 from hypercorn.config import Config
 from hypercorn.trio import serve
 from loguru import logger
-from quart import Response, request
+from pydantic import ValidationError
 from quart_cors import cors
 from quart_trio import QuartTrio
 from rich.console import Console
 from rich.pretty import Pretty
 
-from tlserver.config import AppSettings
-from tlserver.handler import LegacyTranslatorHandler
+from tlserver.config import AppSettings, Version
+from tlserver.handler import (
+    LegacyTranslatorHandler,
+    TranslatorHandler,
+    legacy_dispatcher,
+)
 from tlserver.translator import Translator
 from tlserver.translators.llm import LLMTranslator
 from tlserver.translators.offline import OfflineTranslator
@@ -72,39 +78,37 @@ TRANSLATOR_CLASSES: dict[str, type[Translator] | None] = {
 }
 
 
-config = AppSettings()
+def format_validation_error(exc: ValidationError) -> str:
+    lines = ["Config validation failed:"]
+    for err in exc.errors():
+        location = " → ".join(str(part) for part in err["loc"])
+        message = err["msg"]
+        lines.append(f"- {location}: {message}")
+    return "\n".join(lines)
+
+
+config = None
+try:
+    # intentional ignore, we want config files to provide values
+    config = AppSettings()  # pyright: ignore[reportCallIssue]
+except ValidationError as exc:
+    logger.error(format_validation_error(exc))
+    sys.exit(1)
+if not config.debug:
+    logger.remove()
+    logger.add(sys.stderr, level="INFO")
 logger.info(f"Config loaded:\n{rich_str(config.model_dump())}")
 
 app = QuartTrio(__name__)
 app = cors(app, allow_origin="*")
 die = trio.Event()
 
-# man why the hell does sugoi do per-port translators
-handlers: dict[int, LegacyTranslatorHandler] = {}
-for translator_config in config.translators:
-    translator_cls = TRANSLATOR_CLASSES[translator_config.kind]
-    if translator_cls:
-        with suppress(Exception):
-            handlers[translator_config.port] = LegacyTranslatorHandler(
-                translator_cls(translator_config)
-            )
-
-
-# TODO: custom router instead?
-@app.route("/", methods=["POST", "GET"])
-async def dispatch() -> Response:
-    # ASGI server info (host, port)
-    match request.scope.get("server"):
-        case (_, int(port)):
-            if handler := handlers.get(port):
-                return await handler.receive_command()
-            return Response(
-                f"No plugin for port {port}\n", status=404, mimetype="text/plain"
-            )
-        case _:
-            return Response(
-                "Unable to determine request port\n", status=404, mimetype="text/plain"
-            )
+handlers: list[TranslatorHandler] = [
+    LegacyTranslatorHandler(translator_cls(translator_config))
+    for translator_config in config.translators
+    if (translator_cls := TRANSLATOR_CLASSES[translator_config.kind]) is not None
+    and translator_config.enabled
+]
 
 
 @app.before_serving
@@ -115,6 +119,29 @@ async def on_start() -> None:
 @app.after_serving
 async def on_stop() -> None:
     logger.info("Goodbye, shutting down.")
+
+
+@overload
+def versioned_handlers(
+    handlers: list[TranslatorHandler], version: Literal[Version.LEGACY]
+) -> Sequence[LegacyTranslatorHandler]: ...
+@overload
+def versioned_handlers(
+    handlers: list[TranslatorHandler], version: Literal[Version.V1]
+) -> Sequence[TranslatorHandler]: ...
+def versioned_handlers(
+    handlers: list[TranslatorHandler], version: Version
+) -> Sequence[TranslatorHandler]:
+    return [
+        handler for handler in handlers if version.applies(handler.translator.config)
+    ]
+
+
+legacy_blueprint, ports = legacy_dispatcher(
+    versioned_handlers(handlers, Version.LEGACY)
+)
+
+app.register_blueprint(legacy_blueprint)
 
 
 async def amain() -> None:
@@ -135,7 +162,7 @@ async def amain() -> None:
                 continue
 
     config = Config.from_mapping(
-        bind=[f"0.0.0.0:{port}" for port in handlers],
+        bind=[f"0.0.0.0:{port}" for port in ports],
         errorlog=None,
     )
 

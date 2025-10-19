@@ -9,9 +9,9 @@ from tlserver.config import LLMTranslatorSettings
 from tlserver.translator import Translator
 
 
-class LLMTranslator(Translator):
+class LLMTranslator(Translator[LLMTranslatorSettings]):
     def __init__(self, config: LLMTranslatorSettings) -> None:
-        self.config = config
+        super().__init__(config)
 
         self.translator_ready_or_not = False
         self.can_change_language_or_not = True
@@ -61,7 +61,7 @@ class LLMTranslator(Translator):
 
         logger.debug("messages: {}", self.messages)
 
-        return response.choices[0].message.content
+        return response.choices[0].message.content  # pyright: ignore[reportReturnType, reportAttributeAccessIssue]
 
     async def _translate(self, message: str) -> str:
         message = plugins.process_input_text(message)

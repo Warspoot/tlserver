@@ -3,10 +3,20 @@ from __future__ import annotations
 import os
 import sys
 import tomllib
+from collections import Counter
+from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, Literal
+from typing import (
+    TYPE_CHECKING,
+    Annotated,
+    Any,
+    Literal,
+    Protocol,
+    Self,
+    TypeGuard,
+    overload,
+)
 
-from annotated_types import Gt, Lt
 from loguru import logger
 from pydantic import (
     BaseModel,
@@ -16,7 +26,7 @@ from pydantic import (
     FilePath,
     HttpUrl,
     SecretStr,
-    field_validator,
+    model_validator,
 )
 from pydantic_settings import (
     BaseSettings,
@@ -26,6 +36,44 @@ from pydantic_settings import (
 
 if TYPE_CHECKING:
     from pydantic.fields import FieldInfo
+
+
+# TODO: refactor again
+#   handlers: port mapping to translator for legacy, or path for modern
+#     legacy has no path but port
+#     modern has both path and port but only maps paths (only one port)
+#   translators: as is now
+
+
+class HasPort(Protocol):
+    port: int
+
+
+class HasPath(Protocol):
+    path: str
+
+
+class Version(Enum):
+    LEGACY = 0
+    V1 = 1
+
+    @overload
+    def applies(
+        self: Literal[Version.LEGACY], config: TranslatorSettingsBase
+    ) -> TypeGuard[HasPort]: ...
+    @overload
+    def applies(
+        self: Literal[Version.V1], config: TranslatorSettingsBase
+    ) -> TypeGuard[HasPath]: ...
+    @overload
+    def applies(self: Version, config: TranslatorSettingsBase) -> bool: ...
+
+    def applies(self, config: TranslatorSettingsBase) -> bool:
+        if self is Version.LEGACY:
+            return config.port is not None
+        if self is Version.V1:
+            return config.path is not None
+        return False
 
 
 class _BaseModel(BaseModel):
@@ -38,12 +86,23 @@ class _BaseModel(BaseModel):
 
 class TranslatorSettingsBase(_BaseModel):
     enabled: bool = True
-    # in the future, we will want new handler versions
-    handler_kind: Literal["legacy"] = "legacy"
-    port: Annotated[int, Gt(0), Lt(65536)]
+    port: int | None = None
+    path: str | None = None
+
     input_language: str = "Japanese"
     output_language: str = "English"
     supported_languages: dict[str, str]
+
+    @model_validator(mode="after")
+    def at_least_one(self) -> Self:
+        fields = ["port", "path"]
+        set_fields = [
+            field for field in fields if getattr(self, field, None) is not None
+        ]
+        if len(set_fields) < 1:
+            expect = " or ".join(fields)
+            raise ValueError(f"At least one of {expect} must be provided.")
+        return self
 
 
 class OfflineTranslatorSettings(TranslatorSettingsBase):
@@ -54,7 +113,7 @@ class OfflineTranslatorSettings(TranslatorSettingsBase):
             "Japanese": "Japanese",
         }
     )
-    port: Annotated[int, Gt(0), Lt(65536)] = 14366
+    port: int | None = 14366
     initial_phrase: str = "お疲れさまでした"
     gpu: bool = False
     device: str = "cpu"
@@ -92,7 +151,7 @@ class GoogleTranslatorSettings(TranslatorSettingsBase):
             "Turkish": "tr",
         }
     )
-    port: Annotated[int, Gt(0), Lt(65536)] = 14367
+    port: int | None = 14367
 
 
 class LLMTranslatorSettings(TranslatorSettingsBase):
@@ -111,7 +170,7 @@ class LLMTranslatorSettings(TranslatorSettingsBase):
             "German": "German",
         }
     )
-    port: Annotated[int, Gt(0), Lt(65536)] = 14368
+    port: int | None = 14368
     is_local: bool = True
     model_name: str = "lm_studio/sugoi14b"
     api_server: HttpUrl = HttpUrl("http://127.0.0.1:1234/v1")
@@ -145,7 +204,7 @@ class DeepLTranslatorSettings(TranslatorSettingsBase):
             "Turkish": "tr",
         }
     )
-    port: Annotated[int, Gt(0), Lt(65536)] = 14369
+    port: int | None = 14369
     hide_browser_window: bool = True
     default_navigation_timeout: int = 30000
     website_url: HttpUrl = HttpUrl("https://www.deepl.com/en/translator#")
@@ -167,6 +226,9 @@ TranslatorSettings = Annotated[
 
 class AppSettings(BaseSettings):
     debug: bool = False
+
+    # no effect on legacy handlers
+    root_port: int
 
     translators: list[TranslatorSettings] = Field(default_factory=list)
 
@@ -199,16 +261,20 @@ class AppSettings(BaseSettings):
             file_secret_settings,
         )
 
-    @field_validator("translators")
-    @classmethod
-    def ensure_unique_ports(
-        cls, translators: list[TranslatorSettings]
-    ) -> list[TranslatorSettings]:
-        ports = [t.port for t in translators]
-        duplicates = {p for p in ports if ports.count(p) > 1}
+    @model_validator(mode="after")
+    def ensure_unique_handler_mapping(self) -> Self:
+        ports = Counter(
+            [t.port for t in self.translators if t.port is not None] + [self.root_port]
+        )
+        duplicates = {p for p, c in ports.items() if c > 1}
         if duplicates:
-            raise ValueError(f"Duplicate plugin ports detected: {sorted(duplicates)}")  # noqa: TRY003
-        return translators
+            raise ValueError(f"Duplicate plugin ports detected: {sorted(duplicates)}")
+
+        paths = Counter([t.path for t in self.translators if t.path is not None])
+        duplicates = {p for p, c in paths.items() if c > 1}
+        if duplicates:
+            raise ValueError(f"Duplicate plugin paths detected: {sorted(duplicates)}")
+        return self
 
 
 def get_executable_dir() -> Path | None:
@@ -218,7 +284,7 @@ def get_executable_dir() -> Path | None:
         logger.debug("frozen executable, executable at {}", executable_path)
     # i think this one is scuffed
     if not executable_path and hasattr(sys.modules.get("__main__"), "__file__"):
-        executable_path = Path(sys.modules["__main__"].__file__).resolve().parent
+        executable_path = Path(sys.modules["__main__"].__file__).resolve().parent  # pyright: ignore[reportArgumentType]
         logger.debug("__main__, executable at {}", executable_path)
     return executable_path
 

@@ -22,9 +22,9 @@ def detokenize_batch(text: list[list[str]], sp_target_model: str) -> list[str]:
     return sp.decode(text)  # pyright: ignore[reportAttributeAccessIssue]
 
 
-class OfflineTranslator(Translator):
+class OfflineTranslator(Translator[OfflineTranslatorSettings]):
     def __init__(self, config: OfflineTranslatorSettings) -> None:
-        self.config = config
+        super().__init__(config)
 
         self.translator_ready_or_not = False
         self.can_change_language_or_not = False

@@ -1,13 +1,17 @@
 from abc import ABC, abstractmethod
-from typing import overload
+from typing import Generic, TypeVar
 
 from tlserver.config import TranslatorSettingsBase
 
+ConfigT = TypeVar("ConfigT", bound=TranslatorSettingsBase)
 
-class Translator(ABC):
+
+class Translator(ABC, Generic[ConfigT]):
+    config: ConfigT
+
     @abstractmethod
-    def __init__(self, config: TranslatorSettingsBase) -> None:
-        pass
+    def __init__(self, config: ConfigT) -> None:
+        self.config = config
 
     @property
     @abstractmethod
