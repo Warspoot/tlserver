@@ -6,3 +6,6 @@
 - remove or refactor plugins.py
 - llm batching using structured outputs
 - rest of translators (google deepl)
+
+- issues
+  - underspecified exceptions
