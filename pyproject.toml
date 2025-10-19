@@ -103,15 +103,7 @@ ignore = [
 
   # ===== miscellaneous =====
 
-  # flake8-executable (EXE)
-  # Shebang is present but file is not executable
-  "EXE001",
-
-  # Pyflakes
-  # {name} imported but unused; consider using importlib.util.find_spec to test for availability
-  "F401",
-  # Redefinition of unused {name} from {row}
-  "F811",
-  # Local variable {name} is assigned to but never used
-  "F841",
+  # tryceratops (TRY)
+  # Avoid specifying long messages outside the exception class
+  "TRY003",
 ]
