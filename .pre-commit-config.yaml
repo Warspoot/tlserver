@@ -20,10 +20,10 @@ repos:
       - id: uv-export
         args: ["--frozen", "--output-file=requirements.txt"]
 
-  - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: v0.14.0
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.1
     hooks:
-      - id: ruff
+      - id: ruff-check
         args: [--fix]
       - id: ruff-format
 
