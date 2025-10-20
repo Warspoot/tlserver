@@ -24,10 +24,13 @@ from pydantic import (
     DirectoryPath,
     Field,
     FilePath,
+    GetCoreSchemaHandler,
     HttpUrl,
     SecretStr,
+    ValidationInfo,
     model_validator,
 )
+from pydantic_core import core_schema
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -69,6 +72,27 @@ class Version(Enum):
         return False
 
 
+class Conditional:
+    def __init__(self, gate_field: str) -> None:
+        self.gate_field = gate_field
+
+    def __get_pydantic_core_schema__(
+        self,
+        source: Any,  # noqa: ANN401
+        handler: GetCoreSchemaHandler,
+    ) -> core_schema.CoreSchema:
+        def validator(
+            value: Any,  # noqa: ANN401
+            validator: core_schema.ValidatorFunctionWrapHandler,
+            info: ValidationInfo,
+        ) -> Any:  # noqa: ANN401
+            if info.data.get(self.gate_field, True):
+                return validator(value)
+            return value
+
+        return core_schema.with_info_wrap_validator_function(validator, handler(source))
+
+
 class _BaseModel(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -88,6 +112,8 @@ class TranslatorSettingsBase(_BaseModel):
 
     @model_validator(mode="after")
     def at_least_one(self) -> Self:
+        if not self.enabled:
+            return self
         fields = ["port", "path"]
         set_fields = [
             field for field in fields if getattr(self, field, None) is not None
@@ -117,11 +143,13 @@ class OfflineTranslatorSettings(TranslatorSettingsBase):
     silent: bool = False
     disable_unk: bool = True
 
-    translate_model_path: DirectoryPath = Path("./assets/models/translate/")
-    tok_source_model_path: FilePath = Path(
+    translate_model_path: Annotated[DirectoryPath, Conditional("enabled")] = Path(
+        "./assets/models/translate/"
+    )
+    tok_source_model_path: Annotated[FilePath, Conditional("enabled")] = Path(
         "./assets/models/tokenise/spm.ja.nopretok.model"
     )
-    tok_target_model_path: FilePath = Path(
+    tok_target_model_path: Annotated[FilePath, Conditional("enabled")] = Path(
         "./assets/models/tokenise/spm.en.nopretok.model"
     )
 
@@ -256,14 +284,16 @@ class AppSettings(BaseSettings):
 
     @model_validator(mode="after")
     def ensure_unique_handler_mapping(self) -> Self:
+        active_tls = [t for t in self.translators if t.enabled]
+
         ports = Counter(
-            [t.port for t in self.translators if t.port is not None] + [self.root_port]
+            [t.port for t in active_tls if t.port is not None] + [self.root_port]
         )
         duplicates = {p for p, c in ports.items() if c > 1}
         if duplicates:
             raise ValueError(f"Duplicate plugin ports detected: {sorted(duplicates)}")
 
-        paths = Counter([t.path for t in self.translators if t.path is not None])
+        paths = Counter([t.path for t in active_tls if t.path is not None])
         duplicates = {p for p, c in paths.items() if c > 1}
         if duplicates:
             raise ValueError(f"Duplicate plugin paths detected: {sorted(duplicates)}")
