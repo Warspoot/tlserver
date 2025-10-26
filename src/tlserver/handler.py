@@ -48,16 +48,6 @@ class CommandPayload(BaseModel):
     }
 
     @model_validator(mode="after")
-    def validate_content(self) -> Self:
-        adapter = self._content_adapters.get(self.message)
-        if adapter is None:
-            if self.content not in (None, {}):
-                raise ValueError(f"`{self.message}` must not provide content")
-        else:
-            self.content = adapter.validate_python(self.content)
-        return self
-
-    @model_validator(mode="after")
     def normalize_legacy_translate(self) -> Self:
         # special case for legacy support
         if self.message is Command.TRANSLATE_SENTENCES and isinstance(
@@ -67,6 +57,16 @@ class CommandPayload(BaseModel):
                 "legacy support: translate single sentence converted to batch translate"
             )
             self.message = Command.TRANSLATE_BATCH
+        return self
+    
+    @model_validator(mode="after")
+    def validate_content(self) -> Self:
+        adapter = self._content_adapters.get(self.message)
+        if adapter is None:
+            if self.content not in (None, {}):
+                raise ValueError(f"`{self.message}` must not provide content")
+        else:
+            self.content = adapter.validate_python(self.content)
         return self
 
 
