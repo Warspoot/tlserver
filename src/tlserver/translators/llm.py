@@ -54,7 +54,6 @@ class LLMTranslator(Translator[LLMTranslatorSettings]):
             "api_key": self.config.api_key.get_secret_value(),
             "temperature": self.config.temperature,
             "top_k":  self.config.top_k,
-            "top_p" : self.config.top_p,
             "min_p" : self.config.min_p,
             "repetition_penalty" : self.config.repetition_penalty,
         }
