@@ -207,6 +207,9 @@ class LLMTranslatorSettings(TranslatorSettingsBase):
     context_lines: int = 50
     temperature: float = 0.4
     top_p: float = 0.95
+    top_k: float = 40
+    min_p: float = 0.05
+    repetition_penalty: float = 1.1
 
 
 class DeepLTranslatorSettings(TranslatorSettingsBase):
