@@ -3,6 +3,8 @@ from functools import partial
 import litellm
 import trio
 from loguru import logger
+import json
+from pathlib import Path
 
 from tlserver import plugins
 from tlserver.config import LLMTranslatorSettings
@@ -21,6 +23,16 @@ class LLMTranslator(Translator[LLMTranslatorSettings]):
         self.system_prompt = self.config.system_prompt
 
         self._process_system_prompt()
+
+        self.dictionary = {}
+        try:
+           dictionary_path = Path("dictionary.json")
+           if dictionary_path.exists():
+               with dictionary_path.open("r", encoding="utf-8") as f:
+                   self.dictionary= json.load(f)
+                   logger.info(f"{len(self.dictionary)} terms loaded from dictionary.json")
+        except Exception as e:
+            logger.error(f"dictionary.json failed to load: {e}")   
 
     def _process_system_prompt(self) -> None:
         self.messages = []
@@ -67,7 +79,7 @@ class LLMTranslator(Translator[LLMTranslatorSettings]):
         return response.choices[0].message.content  # pyright: ignore[reportReturnType, reportAttributeAccessIssue]
 
     async def _translate(self, message: str) -> str:
-        message = plugins.process_input_text(message)
+        message = plugins.process_input_text(message, self.dictionary)
         if self.stop_translation:
             return "Translation is paused at the moment"
         self.messages.append({"role": "user", "content": message})
